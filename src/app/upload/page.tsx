@@ -10,7 +10,6 @@ interface CSVData {
   create_time?: string;
   user_id?: string;
   uid?: string;
-  order?: string;
   [key: string]: string | undefined;
 }
 
@@ -202,22 +201,14 @@ export default function UploadPage() {
                 duplicates: allRoomIds.length - uniqueIds.length
               };
 
-              // 构建房间ID和order的映射
-              const roomsMap = new Map<string, number>();
-              allDataRows.forEach(row => {
-                const roomId = row.room_id;
-                const order = row.order ? parseInt(row.order) : 0;
-                if (roomId && roomId.trim() !== '') {
-                  if (!roomsMap.has(roomId) || roomsMap.get(roomId)! < order) {
-                    roomsMap.set(roomId, order);
-                  }
-                }
-              });
-
-              // 转换为数组并排序
-              const roomsWithOrderData: RoomIdWithOrder[] = Array.from(roomsMap.entries())
-                .map(([roomId, order]) => ({ roomId, order }))
-                .sort((a, b) => a.order - b.order);
+              // 自动为每个唯一的room_id分配order（从1开始连续数字）
+              const uniqueRoomIdsSet = Array.from(new Set(allRoomIds));
+              
+              // 按房间ID的顺序分配order（1, 2, 3, ...）
+              const roomsWithOrderData: RoomIdWithOrder[] = uniqueRoomIdsSet.map((roomId, index) => ({
+                roomId,
+                order: index + 1
+              }));
 
               setAllData(allDataRows);
               setRoomIds(allRoomIds);
