@@ -1,9 +1,16 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## 版本
+Node.js: v22.21.0
 
 ## Getting Started
 
-First, run the development server:
+首先需要安装依赖
+```bash
+npm i
+# or
+yarn
+```
 
+运行服务器：
 ```bash
 npm run dev
 # or
