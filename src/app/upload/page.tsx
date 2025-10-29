@@ -46,6 +46,7 @@ export default function UploadPage() {
     total: number;
     unique: number;
     duplicates: number;
+    emptyRooms: number;
   } | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [roomDetails, setRoomDetails] = useState<RoomDetail | null>(null);
@@ -53,6 +54,8 @@ export default function UploadPage() {
   const [filteredRoomIds, setFilteredRoomIds] = useState<string[]>([]);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [roomsWithOrder, setRoomsWithOrder] = useState<RoomIdWithOrder[]>([]);
+  const [emptyRooms, setEmptyRooms] = useState<Set<string>>(new Set());
+  const [filterEmptyRooms, setFilterEmptyRooms] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const detailContainerRef = useRef<HTMLDivElement>(null);
 
@@ -132,6 +135,8 @@ export default function UploadPage() {
       setSelectedRoomId(null);
       setRoomDetails(null);
       setSortOrder('asc');
+      setEmptyRooms(new Set());
+      setFilterEmptyRooms(false);
     }
   };
 
@@ -194,11 +199,46 @@ export default function UploadPage() {
               // 去重
               const uniqueIds = Array.from(new Set(allRoomIds));
 
+              // 计算空房间（content全为NULL且时长小于0）
+              const emptyRoomsSet = new Set<string>();
+              uniqueIds.forEach(roomId => {
+                const roomData = allDataRows.filter(row => row.room_id === roomId);
+                // 检查是否所有content都为NULL
+                const allContentNull = roomData.every(row => !row.content || row.content.trim() === '' || row.content.toUpperCase() === 'NULL');
+                
+                // 计算时长
+                const validTimes = roomData
+                  .map(row => row.create_time)
+                  .filter(time => time && time.trim() !== '')
+                  .map(time => {
+                    try {
+                      return new Date(time!).getTime();
+                    } catch {
+                      return NaN;
+                    }
+                  })
+                  .filter(timestamp => !isNaN(timestamp))
+                  .sort((a, b) => a - b);
+                
+                let durationMinutes = 0;
+                if (validTimes.length >= 2) {
+                  const startTime = validTimes[0];
+                  const endTime = validTimes[validTimes.length - 1];
+                  durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+                }
+                
+                // 如果所有content为NULL且时长小于等于0，则为空房间
+                if (allContentNull && durationMinutes <= 0) {
+                  emptyRoomsSet.add(roomId);
+                }
+              });
+
               // 计算统计信息
               const stats = {
                 total: allRoomIds.length,
                 unique: uniqueIds.length,
-                duplicates: allRoomIds.length - uniqueIds.length
+                duplicates: allRoomIds.length - uniqueIds.length,
+                emptyRooms: emptyRoomsSet.size
               };
 
               // 自动为每个唯一的room_id分配order（从1开始连续数字）
@@ -214,6 +254,7 @@ export default function UploadPage() {
               setRoomIds(allRoomIds);
               setUniqueRoomIds(uniqueIds);
               setRoomsWithOrder(roomsWithOrderData);
+              setEmptyRooms(emptyRoomsSet);
               setStats(stats);
               setIsProcessing(false);
             } catch (err) {
@@ -460,7 +501,7 @@ export default function UploadPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               统计信息
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                 <div className="text-sm text-gray-600 dark:text-gray-400">总数量</div>
                 <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
@@ -473,10 +514,10 @@ export default function UploadPage() {
                   {stats.unique}
                 </div>
               </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
-                <div className="text-sm text-gray-600 dark:text-gray-400">重复数量</div>
-                <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-                  {stats.duplicates}
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                <div className="text-sm text-gray-600 dark:text-gray-400">秒挂通话数量</div>
+                <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                  {stats.emptyRooms}
                 </div>
               </div>
             </div>
@@ -488,7 +529,7 @@ export default function UploadPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                房间列表 (按 Order 排序, {roomsWithOrder.length} 个)
+                房间列表 (按 Order 排序)
               </h2>
               <div className="flex gap-2">
                 <button
@@ -511,11 +552,25 @@ export default function UploadPage() {
                 >
                   倒序
                 </button>
+                {stats && stats.emptyRooms > 0 && (
+                  <button
+                    onClick={() => setFilterEmptyRooms(!filterEmptyRooms)}
+                    className={`px-4 py-2 text-sm rounded-md transition-all ${
+                      filterEmptyRooms
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {filterEmptyRooms ? '显示空房间' : '隐藏空房间'}
+                  </button>
+                )}
               </div>
             </div>
             <div className="max-h-96 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {(sortOrder === 'asc' ? roomsWithOrder : [...roomsWithOrder].reverse()).map((room, index) => (
+                {(sortOrder === 'asc' ? roomsWithOrder : [...roomsWithOrder].reverse())
+                  .filter(room => !filterEmptyRooms || !emptyRooms.has(room.roomId))
+                  .map((room, index) => (
                   <button
                     key={index}
                     onClick={() => handleRoomIdClick(room.roomId)}
